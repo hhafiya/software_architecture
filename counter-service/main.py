@@ -1,21 +1,17 @@
 from fastapi import FastAPI
 from typing import Dict
-import asyncio
 
 app = FastAPI()
 
 balances = {}
-lock = asyncio.Lock()
 
 @app.post("/update")
-async def update_balance(data: Dict):
+def update_balance(data: Dict):
     user_id = data.get("user_id")
     amount = data.get("amount", 0)
-
-    async with lock:
-        current_balance = balances.get(user_id, 0)
-        new_balance = current_balance + amount
-        balances[user_id] = new_balance
+    current_balance = balances.get(user_id, 0)
+    new_balance = current_balance + amount
+    balances[user_id] = new_balance
 
     return {"user_id": user_id, "balance": new_balance}
 

@@ -27,6 +27,8 @@ async def reset_system(client):
 async def scenario1():
     # 10 accounts × 10K requests each
     async with httpx.AsyncClient() as client:
+        await reset_system(client)
+        
         async def worker(client_id):
             user_id = f"user_{client_id}"
             for _ in range(REQUESTS_PER_CLIENT):
