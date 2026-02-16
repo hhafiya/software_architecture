@@ -19,3 +19,10 @@ def get_user_logs(user_id: str):
         if t.get("user_id") == user_id:
             user_transactions.append(t)
     return user_transactions
+
+@app.post("/reset")
+def reset_logs():
+    global history
+    history = {}
+    print("LOG: History has been reset")
+    return {"status": "logs cleared"}
