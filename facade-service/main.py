@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from typing import Dict
+from pydantic import BaseModel
 import time
 import httpx
 import asyncio
@@ -10,18 +10,20 @@ app.state.client = httpx.AsyncClient()
 LOGGING_SERVICE_URL = "http://logging-service:8000"
 COUNTER_SERVICE_URL = "http://counter-service:8000"
 
-stats = {
+app.state.stats = {
     "logging_time_total": 0.0,
     "counter_time_total": 0.0,
     "request_count": 0
 }
 
+class TransactionRequest(BaseModel):
+    user_id: str
+    amount: int
+
 @app.post("/transaction")
-async def create_transaction(data: Dict):
-    user_id = data.get("user_id")
-    amount = data.get("amount")
+async def create_transaction(data: TransactionRequest):
     transaction_id = str(int(time.time() * 1000))
-    payload = {"transaction_id": transaction_id, "user_id": user_id, "amount": amount}
+    payload = {"transaction_id": transaction_id, "user_id": data.user_id, "amount": data.amount}
 
     client = app.state.client
     async def log_request():
@@ -38,11 +40,12 @@ async def create_transaction(data: Dict):
         log_request(), 
         counter_request()
     )
-    stats["logging_time_total"] += log_dur
-    stats["counter_time_total"] += counter_dur
-    stats["request_count"] += 1
+    app.state.stats["logging_time_total"] += log_dur
+    app.state.stats["counter_time_total"] += counter_dur
+    app.state.stats["request_count"] += 1
 
-    return {"transaction_id": transaction_id, "balance": counter_resp.json().get("balance")}
+    counter_data = counter_resp.json()
+    return {"transaction_id": transaction_id, "balance": counter_data.get("balance")}
     
 @app.get("/user/{user_id}")
 async def get_user_info(user_id: str):
@@ -50,25 +53,28 @@ async def get_user_info(user_id: str):
     balance_task = client.get(f"{COUNTER_SERVICE_URL}/balance/{user_id}")
     logs_task = client.get(f"{LOGGING_SERVICE_URL}/logs/{user_id}")
     balance_resp, logs_resp = await asyncio.gather(balance_task, logs_task)
+
+    balance_data = balance_resp.json()
+    logs_data = logs_resp.json()
     return {
-        "balance": balance_resp.json().get("balance"),
-        "transactions": logs_resp.json()
+        "balance": balance_data.get("balance"),
+        "transactions": logs_data
     }
 
 @app.get("/accounts")
 async def get_all_accounts():
     client = app.state.client
     resp = await client.get(f"{COUNTER_SERVICE_URL}/balances")
-    return resp.json()
+    data = resp.json()
+    return data
 
 @app.get("/stats")
 def get_stats():
-    return stats
+    return app.state.stats
 
 @app.post("/stats/reset")
 def reset_stats():
-    global stats
-    stats.update({"logging_time_total": 0.0, "counter_time_total": 0.0, "request_count": 0})
+    app.state.stats.update({"logging_time_total": 0.0, "counter_time_total": 0.0, "request_count": 0})
     return {"status": "reset"}
 
 @app.post("/reset")
