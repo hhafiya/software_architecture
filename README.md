@@ -1,7 +1,7 @@
 # software_architecture task 1
 
 Protocol:
-[text](protocol_kyrylova.pdf)
+[file](protocol_kyrylova.pdf)
 
 **Language**: Python 3.13
 **Framework**: FastAPI
