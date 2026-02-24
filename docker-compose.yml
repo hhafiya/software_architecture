@@ -16,12 +16,29 @@ services:
   hz-node-1:
     image: hazelcast/hazelcast:5.6
     ports: ["5701:5701"]
+    environment:
+      - HZ_CLUSTER_NAME=dev
+      - HZ_NETWORK_PUBLIC_ADDRESS=hz-node-1:5701
+      - HZ_NETWORK_JOIN_TCP_IP_ENABLED=true
+      - HZ_NETWORK_JOIN_TCP_IP_MEMBERS=hz-node-1,hz-node-2,hz-node-3
+
   hz-node-2:
     image: hazelcast/hazelcast:5.6
     ports: ["5702:5701"]
+    environment:
+      - HZ_CLUSTER_NAME=dev
+      - HZ_NETWORK_PUBLIC_ADDRESS=hz-node-2:5701
+      - HZ_NETWORK_JOIN_TCP_IP_ENABLED=true
+      - HZ_NETWORK_JOIN_TCP_IP_MEMBERS=hz-node-1,hz-node-2,hz-node-3
+
   hz-node-3:
     image: hazelcast/hazelcast:5.6
     ports: ["5703:5701"]
+    environment:
+      - HZ_CLUSTER_NAME=dev
+      - HZ_NETWORK_PUBLIC_ADDRESS=hz-node-3:5701
+      - HZ_NETWORK_JOIN_TCP_IP_ENABLED=true
+      - HZ_NETWORK_JOIN_TCP_IP_MEMBERS=hz-node-1,hz-node-2,hz-node-3
   mancenter:
     image: hazelcast/management-center:5.6
     ports: ["8081:8080"]
