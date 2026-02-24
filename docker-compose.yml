@@ -12,3 +12,18 @@ services:
 
   counter-service:
     build: ./counter-service
+  
+  hz-node-1:
+    image: hazelcast/hazelcast:5.6
+    ports: ["5701:5701"]
+  hz-node-2:
+    image: hazelcast/hazelcast:5.6
+    ports: ["5702:5701"]
+  hz-node-3:
+    image: hazelcast/hazelcast:5.6
+    ports: ["5703:5701"]
+  mancenter:
+    image: hazelcast/management-center:5.6
+    ports: ["8081:8080"]
+    environment:
+      - HZ_MC_DEFAULT_CLUSTER_MEMBERS=hz-node-1,hz-node-2,hz-node-3
