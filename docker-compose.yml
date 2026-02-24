@@ -1,0 +1,14 @@
+services:
+  facade-service:
+    build: ./facade-service
+    ports:
+      - "8080:8000"
+    depends_on:
+      - logging-service
+      - counter-service
+
+  logging-service:
+    build: ./logging-service
+
+  counter-service:
+    build: ./counter-service
