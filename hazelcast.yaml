@@ -1,0 +1,14 @@
+hazelcast:
+  cluster-name: dev
+  network:
+    join:
+      tcp-ip:
+        enabled: true
+        member-list:
+          - hz-node-1
+          - hz-node-2
+          - hz-node-3
+  map:
+    testmap:
+      backup-count: 2
+      async-backup-count: 0

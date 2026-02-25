@@ -1,6 +1,6 @@
 # Distributed Map
 import hazelcast
-# import time
+import time
 
 def run_task3():
     client = hazelcast.HazelcastClient(
@@ -12,7 +12,7 @@ def run_task3():
             ]
         )
     print("Connected to Hazelcast cluster.")
-    distributed_map = client.get_map("test-map").blocking()
+    distributed_map = client.get_map("testmap").blocking()
     distributed_map.clear()
 
     print("Writing 1000 values...")
