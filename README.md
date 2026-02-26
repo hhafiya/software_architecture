@@ -1,4 +1,4 @@
-# software_architecture task 1
+# software_architecture task 2 (Hazelcast)
 
 Protocol:
 [file](Protocol-Kyrylova.pdf)
