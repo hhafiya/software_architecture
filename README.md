@@ -4,9 +4,13 @@ Protocol:
 [file](Protocol-Kyrylova.pdf)
 
 **Language**: Python 3.13
+
 **Framework**: FastAPI
+
 **Containerization**: Docker & Docker Compose
+
 **Communication**: REST API
+
 **Middleware**: Hazelcast (Cluster of 3 nodes)
 
 Built on top of Task 1.
