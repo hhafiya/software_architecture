@@ -1,36 +1,34 @@
 # software_architecture task 1
 
 Protocol:
-[file](protocol_kyrylova.pdf)
+[file](Protocol-Kyrylova.pdf)
 
 **Language**: Python 3.13
 **Framework**: FastAPI
 **Containerization**: Docker & Docker Compose
 **Communication**: REST API
+**Middleware**: Hazelcast (Cluster of 3 nodes)
 
-## Endpoints
-User communicates with the system via facde service.
-- POST /transaction — (user_id and amount).
-- GET /user/{user_id}
-- GET /accounts
+Built on top of Task 1.
 
 ## Usage example
 ```
-curl -X 'POST' \
-  'http://localhost:8080/transaction' \
-  -H 'Content-Type: application/json' \
-  -d '{
-  "user_id": "client_1",
-  "amount": 500
-}'
+docker-compose exec counter-service uv run python task3.py
+```
+```
+docker-compose exec counter-service uv run python task4.py
+```
+```
+docker-compose exec counter-service uv run python task5.py
+```
+```
+docker-compose exec counter-service uv run python task6.py
+```
+```
+docker-compose exec counter-service uv run python task8.py
 ```
 
 ## Deployment and Execution
 ```
 docker-compose up --build
-```
-
-Used for testing:
-```
-http://localhost:8080/docs
 ```
