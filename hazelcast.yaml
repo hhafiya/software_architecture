@@ -12,3 +12,7 @@ hazelcast:
     testmap:
       backup-count: 2
       async-backup-count: 0
+  queue:
+    bounded_queue:
+      max-size: 10
+      backup-count: 1

@@ -11,7 +11,11 @@ services:
     build: ./logging-service
 
   counter-service:
-    build: ./counter-service
+    build:
+      context: .
+      dockerfile: counter-service/Dockerfile
+    volumes:
+      - ./homework2:/app/homework2
   
   hz-node-1:
     image: hazelcast/hazelcast:5.6
