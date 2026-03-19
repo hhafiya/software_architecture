@@ -14,10 +14,10 @@ LOGGING_SERVICES = [
 COUNTER_SERVICE_URL = "http://counter-service:8000"
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    app.state.client = httpx.AsyncClient()
+async def lifespan(app_: FastAPI):
+    app_.state.client = httpx.AsyncClient()
     yield
-    await app.state.client.aclose()
+    await app_.state.client.aclose()
 
 app = FastAPI(lifespan=lifespan)
 
@@ -73,7 +73,7 @@ async def get_user_info(user_id: str):
     balance_resp = await app.state.client.get(f"{COUNTER_SERVICE_URL}/balance/{user_id}")
     urls = LOGGING_SERVICES.copy()
     random.shuffle(urls)
-    
+
     logs_data = []
     for url in urls:
         try:
@@ -102,7 +102,8 @@ def get_stats():
 
 @app.post("/stats/reset")
 def reset_stats():
-    app.state.stats.update({"logging_time_total": 0.0, "counter_time_total": 0.0, "request_count": 0})
+    app.state.stats.update({"logging_time_total": 0.0, 
+                            "counter_time_total": 0.0, "request_count": 0})
     return {"status": "reset"}
 
 @app.post("/reset")

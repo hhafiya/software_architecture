@@ -14,7 +14,7 @@ async def lifespan(app_: FastAPI):
     )
     app_.state.hz_map = client.get_map("logmap").blocking()
     app_.state.hz_client = client
-    
+
     print("LOG: Connected to Hazelcast cluster")
     yield
     client.shutdown()
