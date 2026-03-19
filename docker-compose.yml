@@ -1,14 +1,68 @@
 services:
+  hz-node-1:
+    image: hazelcast/hazelcast:5.3
+    ports: ["5701:5701"]
+    volumes:
+      - ./hazelcast.yaml:/opt/hazelcast/config/hazelcast.yaml
+    environment:
+      - JAVA_OPTS=-Dhazelcast.config=/opt/hazelcast/config/hazelcast.yaml
+  hz-node-2:
+    image: hazelcast/hazelcast:5.3
+    ports: ["5702:5701"]
+    volumes:
+      - ./hazelcast.yaml:/opt/hazelcast/config/hazelcast.yaml
+    environment:
+      - JAVA_OPTS=-Dhazelcast.config=/opt/hazelcast/config/hazelcast.yaml
+  hz-node-3:
+    image: hazelcast/hazelcast:5.3
+    ports: ["5703:5701"]
+    volumes:
+      - ./hazelcast.yaml:/opt/hazelcast/config/hazelcast.yaml
+    environment:
+      - JAVA_OPTS=-Dhazelcast.config=/opt/hazelcast/config/hazelcast.yaml
+  mancenter:
+    image: hazelcast/management-center:5.3
+    ports: ["8081:8080"]
+    environment:
+      - HZ_MC_DEFAULT_CLUSTER_MEMBERS=hz-node-1,hz-node-2,hz-node-3
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: balances
+    ports:
+      - "5432:5432"
+
+  logging-service-1:
+    build: ./logging-service
+    environment:
+      - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
+
+  logging-service-2:
+    build: ./logging-service
+    environment:
+      - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
+
+  logging-service-3:
+    build: ./logging-service
+    environment:
+      - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
+
+  counter-service:
+    build: ./counter-service
+    depends_on:
+      - db
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/balances
+
   facade-service:
     build: ./facade-service
     ports:
       - "8080:8000"
     depends_on:
-      - logging-service
+      - logging-service-1
+      - logging-service-2
+      - logging-service-3
       - counter-service
-
-  logging-service:
-    build: ./logging-service
-
-  counter-service:
-    build: ./counter-service

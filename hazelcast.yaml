@@ -1,0 +1,15 @@
+hazelcast:
+  cluster-name: log
+  network:
+    join:
+      tcp-ip:
+        enabled: true
+        connection-timeout-seconds: 30
+        member-list:
+          - hz-node-1
+          - hz-node-2
+          - hz-node-3
+  map:
+    logmap:
+      backup-count: 2
+      async-backup-count: 0
