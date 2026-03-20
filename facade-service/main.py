@@ -29,7 +29,7 @@ app.state.stats = {
 
 class TransactionRequest(BaseModel):
     user_id: str
-    amount: int
+    amount: float
 
 async def log_request(payload: dict):
     urls = LOGGING_SERVICES.copy()
@@ -58,7 +58,7 @@ async def create_transaction(data: TransactionRequest):
         return resp, time.perf_counter() - start
 
     (log_resp, log_dur), (counter_resp, counter_dur) = await asyncio.gather(
-        log_request(payload), 
+        log_request(payload),
         counter_request()
     )
     app.state.stats["logging_time_total"] += log_dur
@@ -102,16 +102,31 @@ def get_stats():
 
 @app.post("/stats/reset")
 def reset_stats():
-    app.state.stats.update({"logging_time_total": 0.0, 
+    app.state.stats.update({"logging_time_total": 0.0,
                             "counter_time_total": 0.0, "request_count": 0})
     return {"status": "reset"}
 
 @app.post("/reset")
 async def reset_all_systems():
-    client = app.state.client
     reset_stats() 
-    await asyncio.gather(
-        client.post(f"{COUNTER_SERVICE_URL}/reset"),
-        app.state.client.post(f"{LOGGING_SERVICES[0]}/reset")
-    )
+    await app.state.client.post(f"{COUNTER_SERVICE_URL}/reset")
+
+    urls = LOGGING_SERVICES.copy()
+    random.shuffle(urls)
+
+    reset_successful = False
+    for url in urls:
+        try:
+            resp = await app.state.client.post(f"{url}/reset", timeout=1.5)
+            if resp.status_code == 200:
+                reset_successful = True
+                print(f"FACADE: System reset via {url}")
+                break
+        except (httpx.ConnectError, httpx.TimeoutException):
+            print(f"FACADE: Could not reset via {url}, trying next...")
+            continue
+
+    if not reset_successful:
+        return {"status": "partial reset", "error":
+                "Could not reach any logging service to reset Hazelcast"}
     return {"status": "all systems reset"}

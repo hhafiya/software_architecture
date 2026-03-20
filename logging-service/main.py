@@ -24,7 +24,7 @@ app = FastAPI(lifespan=lifespan)
 class LogTransactionRequest(BaseModel):
     transaction_id: str
     user_id: str
-    amount: int
+    amount: float
 
 @app.post("/log")
 def log_transaction(data: LogTransactionRequest):

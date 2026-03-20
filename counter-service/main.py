@@ -15,7 +15,7 @@ def init_db():
             cur.execute('''
                 CREATE TABLE IF NOT EXISTS accounts (
                     user_id TEXT PRIMARY KEY,
-                    balance INTEGER DEFAULT 0
+                    balance NUMERIC DEFAULT 0
                 )
             ''')
             conn.commit()
@@ -41,7 +41,7 @@ def get_db_connection():
 
 class UpdateRequest(BaseModel):
     user_id: str
-    amount: int
+    amount: float
 
 @app.post("/update")
 def update_balance(data: UpdateRequest):

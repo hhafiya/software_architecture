@@ -1,25 +1,43 @@
 services:
   hz-node-1:
     image: hazelcast/hazelcast:5.3
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5701/hazelcast/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     ports: ["5701:5701"]
     volumes:
       - ./hazelcast.yaml:/opt/hazelcast/config/hazelcast.yaml
     environment:
       - JAVA_OPTS=-Dhazelcast.config=/opt/hazelcast/config/hazelcast.yaml
+      - HZ_NETWORK_RESTAPI_ENABLED=true
   hz-node-2:
     image: hazelcast/hazelcast:5.3
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5701/hazelcast/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     ports: ["5702:5701"]
     volumes:
       - ./hazelcast.yaml:/opt/hazelcast/config/hazelcast.yaml
     environment:
       - JAVA_OPTS=-Dhazelcast.config=/opt/hazelcast/config/hazelcast.yaml
+      - HZ_NETWORK_RESTAPI_ENABLED=true
   hz-node-3:
     image: hazelcast/hazelcast:5.3
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5701/hazelcast/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     ports: ["5703:5701"]
     volumes:
       - ./hazelcast.yaml:/opt/hazelcast/config/hazelcast.yaml
     environment:
       - JAVA_OPTS=-Dhazelcast.config=/opt/hazelcast/config/hazelcast.yaml
+      - HZ_NETWORK_RESTAPI_ENABLED=true
   mancenter:
     image: hazelcast/management-center:5.3
     ports: ["8081:8080"]
@@ -39,16 +57,37 @@ services:
 
   logging-service-1:
     build: ./logging-service
+    depends_on:
+      hz-node-1:
+        condition: service_healthy
+      hz-node-2:
+        condition: service_healthy
+      hz-node-3:
+        condition: service_healthy
     environment:
       - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
 
   logging-service-2:
     build: ./logging-service
+    depends_on:
+      hz-node-1:
+        condition: service_healthy
+      hz-node-2:
+        condition: service_healthy
+      hz-node-3:
+        condition: service_healthy
     environment:
       - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
 
   logging-service-3:
     build: ./logging-service
+    depends_on:
+      hz-node-1:
+        condition: service_healthy
+      hz-node-2:
+        condition: service_healthy
+      hz-node-3:
+        condition: service_healthy
     environment:
       - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
 
