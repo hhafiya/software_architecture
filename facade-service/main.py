@@ -1,14 +1,25 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import time
+import random
 import httpx
 import asyncio
+from contextlib import asynccontextmanager
 
-app = FastAPI()
-app.state.client = httpx.AsyncClient()
-
-LOGGING_SERVICE_URL = "http://logging-service:8000"
+LOGGING_SERVICES = [
+    "http://logging-service-1:8000",
+    "http://logging-service-2:8000",
+    "http://logging-service-3:8000"
+]
 COUNTER_SERVICE_URL = "http://counter-service:8000"
+
+@asynccontextmanager
+async def lifespan(app_: FastAPI):
+    app_.state.client = httpx.AsyncClient()
+    yield
+    await app_.state.client.aclose()
+
+app = FastAPI(lifespan=lifespan)
 
 app.state.stats = {
     "logging_time_total": 0.0,
@@ -18,26 +29,36 @@ app.state.stats = {
 
 class TransactionRequest(BaseModel):
     user_id: str
-    amount: int
+    amount: float
+
+async def log_request(payload: dict):
+    urls = LOGGING_SERVICES.copy()
+    random.shuffle(urls)
+
+    start = time.perf_counter()
+    for url in urls:
+        try:
+            resp = await app.state.client.post(f"{url}/log", json=payload, timeout=1.5)
+            if resp.status_code == 200:
+                return resp, time.perf_counter() - start
+        except (httpx.ConnectError, httpx.TimeoutException):
+            print(f"FACADE: {url} is down, trying another...")
+            continue
+
+    raise RuntimeError("All logging services are unavailable")
 
 @app.post("/transaction")
 async def create_transaction(data: TransactionRequest):
     transaction_id = str(int(time.time() * 1000))
     payload = {"transaction_id": transaction_id, "user_id": data.user_id, "amount": data.amount}
 
-    client = app.state.client
-    async def log_request():
-        start = time.perf_counter()
-        resp = await client.post(f"{LOGGING_SERVICE_URL}/log", json=payload)
-        return resp, time.perf_counter() - start
-
     async def counter_request():
         start = time.perf_counter()
-        resp = await client.post(f"{COUNTER_SERVICE_URL}/update", json=payload)
+        resp = await app.state.client.post(f"{COUNTER_SERVICE_URL}/update", json=payload)
         return resp, time.perf_counter() - start
 
     (log_resp, log_dur), (counter_resp, counter_dur) = await asyncio.gather(
-        log_request(), 
+        log_request(payload),
         counter_request()
     )
     app.state.stats["logging_time_total"] += log_dur
@@ -49,15 +70,22 @@ async def create_transaction(data: TransactionRequest):
     
 @app.get("/user/{user_id}")
 async def get_user_info(user_id: str):
-    client = app.state.client
-    balance_task = client.get(f"{COUNTER_SERVICE_URL}/balance/{user_id}")
-    logs_task = client.get(f"{LOGGING_SERVICE_URL}/logs/{user_id}")
-    balance_resp, logs_resp = await asyncio.gather(balance_task, logs_task)
+    balance_resp = await app.state.client.get(f"{COUNTER_SERVICE_URL}/balance/{user_id}")
+    urls = LOGGING_SERVICES.copy()
+    random.shuffle(urls)
 
-    balance_data = balance_resp.json()
-    logs_data = logs_resp.json()
+    logs_data = []
+    for url in urls:
+        try:
+            resp = await app.state.client.get(f"{url}/logs/{user_id}", timeout=1.5)
+            if resp.status_code == 200:
+                logs_data = resp.json()
+                break
+        except (httpx.ConnectError, httpx.TimeoutException):
+            continue
+
     return {
-        "balance": balance_data.get("balance"),
+        "balance": balance_resp.json().get("balance"),
         "transactions": logs_data
     }
 
@@ -74,15 +102,31 @@ def get_stats():
 
 @app.post("/stats/reset")
 def reset_stats():
-    app.state.stats.update({"logging_time_total": 0.0, "counter_time_total": 0.0, "request_count": 0})
+    app.state.stats.update({"logging_time_total": 0.0,
+                            "counter_time_total": 0.0, "request_count": 0})
     return {"status": "reset"}
 
 @app.post("/reset")
 async def reset_all_systems():
-    client = app.state.client
     reset_stats() 
-    await asyncio.gather(
-        client.post(f"{COUNTER_SERVICE_URL}/reset"),
-        client.post(f"{LOGGING_SERVICE_URL}/reset")
-    )
+    await app.state.client.post(f"{COUNTER_SERVICE_URL}/reset")
+
+    urls = LOGGING_SERVICES.copy()
+    random.shuffle(urls)
+
+    reset_successful = False
+    for url in urls:
+        try:
+            resp = await app.state.client.post(f"{url}/reset", timeout=1.5)
+            if resp.status_code == 200:
+                reset_successful = True
+                print(f"FACADE: System reset via {url}")
+                break
+        except (httpx.ConnectError, httpx.TimeoutException):
+            print(f"FACADE: Could not reset via {url}, trying next...")
+            continue
+
+    if not reset_successful:
+        return {"status": "partial reset", "error":
+                "Could not reach any logging service to reset Hazelcast"}
     return {"status": "all systems reset"}
