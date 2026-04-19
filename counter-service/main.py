@@ -11,7 +11,8 @@ from fastapi import FastAPI
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user:password@db:5432/balances")
 HZ_SERVERS = os.getenv("HZ_SERVERS", "hz-node-1:5701,hz-node-2:5701,hz-node-3:5701").split(",")
 CONFIG_SERVER_URL = os.getenv("CONFIG_SERVER_URL", "http://config-server:8000")
-MY_ADDRESS = f"http://{socket.gethostname()}:8000"
+MY_HOSTNAME = os.getenv("MY_HOST", socket.gethostname())
+MY_ADDRESS = f"http://{MY_HOSTNAME}:8000"
 
 def init_db():
     for i in range(5):
@@ -60,7 +61,7 @@ def start_queue_worker():
             time.sleep(1)
 
 @asynccontextmanager
-async def lifespan():
+async def lifespan(app: FastAPI):
     init_db()
 
     async with httpx.AsyncClient() as client:

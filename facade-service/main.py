@@ -91,9 +91,13 @@ async def get_user_info(user_id: str):
 
 @app.get("/accounts")
 async def get_all_accounts():
-    c_url = await get_service_url("counter-service")
-    resp = await app.state.http_client.get(f"{c_url}/balances")
-    return resp.json()
+    try:
+        c_url = await get_service_url("counter-service")
+        resp = await app.state.http_client.get(f"{c_url}/balances", timeout=2.0)
+        return resp.json()
+    except (httpx.HTTPError, HTTPException) as e:
+        print(f"FACADE: Cannot fetch accounts: {e}")
+        return {"error": "Counter service unavailable", "accounts": []}
 
 @app.get("/stats")
 def get_stats():
