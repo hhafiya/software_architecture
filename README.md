@@ -1,7 +1,7 @@
-# software_architecture task 3
+# software_architecture task 4
 
 Protocol:
-[protocol](protocol_kyrylova.pdf)
+[protocol](protocol_kyrylova_4.pdf)
 
 **Language**: Python 3.13
 **Framework**: FastAPI
@@ -28,9 +28,4 @@ curl -X 'POST' \
 ## Deployment and Execution
 ```
 docker-compose up --build
-```
-
-Used for testing:
-```
-http://localhost:8080/docs
 ```
