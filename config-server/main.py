@@ -1,8 +1,13 @@
-from fastapi import FastAPI
 from collections import defaultdict
+from fastapi import FastAPI
 
 app = FastAPI()
-# {"service_name": ["http://ip1:port", ...]}
+
+# Dict example:
+# {
+#     "service_name": [address1, address2, ...]
+# }
+
 registry = defaultdict(list)
 
 @app.post("/register")

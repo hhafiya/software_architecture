@@ -1,22 +1,31 @@
-import os
 from contextlib import asynccontextmanager
+import os, socket, httpx, hazelcast
 from fastapi import FastAPI
 from pydantic import BaseModel
-import hazelcast
 
-HZ_SERVERS = os.getenv("HZ_SERVERS", "hz-node-1:5701,hz-node-2:5701,hz-node-3:5701").split(",")
+HZ_SERVERS = os.getenv("HZ_SERVERS", "hz-node-1:5701").split(",")
+CONFIG_SERVER_URL = os.getenv("CONFIG_SERVER_URL", "http://config-server:8000")
+MY_HOSTNAME = os.getenv("MY_HOST", socket.gethostname())
+MY_ADDRESS = f"http://{MY_HOSTNAME}:8000"
 
 @asynccontextmanager
 async def lifespan(app_: FastAPI):
-    client = hazelcast.HazelcastClient(
-        cluster_members=HZ_SERVERS,
-        cluster_name="log"
-    )
+    client = hazelcast.HazelcastClient(cluster_members=HZ_SERVERS, cluster_name="log")
     app_.state.hz_map = client.get_map("logmap").blocking()
-    app_.state.hz_client = client
 
-    print("LOG: Connected to Hazelcast cluster")
-    yield
+    async with httpx.AsyncClient() as http_client:
+        try:
+            response = await http_client.post(
+                f"{CONFIG_SERVER_URL}/register",
+                params={"service_name": "logging-service", "address": MY_ADDRESS},
+            )
+            response.raise_for_status()
+            print(f"LOG: Registered at {MY_ADDRESS}")
+        except httpx.HTTPError as e:
+            print(f"LOG: Registration failed: {e}")
+
+        yield
+
     client.shutdown()
 
 app = FastAPI(lifespan=lifespan)

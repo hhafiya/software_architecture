@@ -55,9 +55,18 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  config-server:
+    build: ./config-server
+    container_name: config-server
+    ports:
+      - "8001:8000"
+
   logging-service-1:
     build: ./logging-service
+    container_name: logging-service-1
     depends_on:
+      config-server:
+        condition: service_started
       hz-node-1:
         condition: service_healthy
       hz-node-2:
@@ -66,10 +75,16 @@ services:
         condition: service_healthy
     environment:
       - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
+      - CONFIG_SERVER_URL=http://config-server:8000
+      - SERVICE_NAME=logging-service
+      - MY_HOST=logging-service-1
 
   logging-service-2:
     build: ./logging-service
+    container_name: logging-service-2
     depends_on:
+      config-server:
+        condition: service_started
       hz-node-1:
         condition: service_healthy
       hz-node-2:
@@ -78,10 +93,16 @@ services:
         condition: service_healthy
     environment:
       - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
+      - CONFIG_SERVER_URL=http://config-server:8000
+      - SERVICE_NAME=logging-service
+      - MY_HOST=logging-service-2
 
   logging-service-3:
     build: ./logging-service
+    container_name: logging-service-3
     depends_on:
+      config-server:
+        condition: service_started
       hz-node-1:
         condition: service_healthy
       hz-node-2:
@@ -90,23 +111,33 @@ services:
         condition: service_healthy
     environment:
       - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
+      - CONFIG_SERVER_URL=http://config-server:8000
+      - SERVICE_NAME=logging-service
+      - MY_HOST=logging-service-3
 
   counter-service:
     build: ./counter-service
+    container_name: counter-service
     depends_on:
       - db
+      - config-server
+      - hz-node-1
     environment:
       - DATABASE_URL=postgresql://user:password@db:5432/balances
+      - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
+      - CONFIG_SERVER_URL=http://config-server:8000
+      - MY_HOST=counter-service
 
   facade-service:
     build: ./facade-service
     ports:
       - "8080:8000"
     depends_on:
-      - logging-service-1
-      - logging-service-2
-      - logging-service-3
-      - counter-service
+      - config-server
+      - hz-node-1
+    environment:
+      - CONFIG_SERVER_URL=http://config-server:8000
+      - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
 
 volumes:
   postgres_data:
