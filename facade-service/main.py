@@ -1,132 +1,122 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
-import time
-import random
-import httpx
-import asyncio
 from contextlib import asynccontextmanager
+import os, time, random, httpx, hazelcast
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
-LOGGING_SERVICES = [
-    "http://logging-service-1:8000",
-    "http://logging-service-2:8000",
-    "http://logging-service-3:8000"
-]
-COUNTER_SERVICE_URL = "http://counter-service:8000"
+CONFIG_SERVER_URL = os.getenv("CONFIG_SERVER_URL", "http://config-server:8000")
+HZ_SERVERS = os.getenv("HZ_SERVERS", "hz-node-1:5701,hz-node-2:5701,hz-node-3:5701").split(",")
 
 @asynccontextmanager
 async def lifespan(app_: FastAPI):
-    app_.state.client = httpx.AsyncClient()
+    hz_client = hazelcast.HazelcastClient(cluster_members=HZ_SERVERS, cluster_name="log")
+    app_.state.queue = hz_client.get_queue("counter-queue").blocking()
+    app_.state.http_client = httpx.AsyncClient()
+
+    app_.state.stats = {
+        "logging_time_total": 0.0,
+        "request_count": 0
+    }
+
     yield
-    await app_.state.client.aclose()
+    hz_client.shutdown()
+    await app_.state.http_client.aclose()
 
 app = FastAPI(lifespan=lifespan)
 
-app.state.stats = {
-    "logging_time_total": 0.0,
-    "counter_time_total": 0.0,
-    "request_count": 0
-}
+async def get_service_url(service_name: str):
+    try:
+        resp = await app.state.http_client.get(
+            f"{CONFIG_SERVER_URL}/nodes/{service_name}",
+            timeout=2.0
+        )
+        nodes = resp.json().get("nodes", [])
+        if not nodes:
+            raise HTTPException(status_code=503, detail=f"No active nodes for {service_name}")
+        return random.choice(nodes)
+    except httpx.HTTPError as e:
+        print(f"FACADE: Error discovery for {service_name}: {e}")
+        raise HTTPException(
+            status_code=503, detail=
+            f"Config Server unavailable or {service_name} not registered") from e
+    except ValueError as e:
+        print(f"FACADE: Invalid response from config server for {service_name}: {e}")
+        raise HTTPException(
+            status_code=503, detail=
+            f"Config Server unavailable or {service_name} not registered") from e
 
 class TransactionRequest(BaseModel):
     user_id: str
     amount: float
 
-async def log_request(payload: dict):
-    urls = LOGGING_SERVICES.copy()
-    random.shuffle(urls)
-
-    start = time.perf_counter()
-    for url in urls:
-        try:
-            resp = await app.state.client.post(f"{url}/log", json=payload, timeout=1.5)
-            if resp.status_code == 200:
-                return resp, time.perf_counter() - start
-        except (httpx.ConnectError, httpx.TimeoutException):
-            print(f"FACADE: {url} is down, trying another...")
-            continue
-
-    raise RuntimeError("All logging services are unavailable")
-
 @app.post("/transaction")
 async def create_transaction(data: TransactionRequest):
     transaction_id = str(int(time.time() * 1000))
-    payload = {"transaction_id": transaction_id, "user_id": data.user_id, "amount": data.amount}
+    payload = {
+        "transaction_id": transaction_id, 
+        "user_id": data.user_id, 
+        "amount": data.amount
+    }
 
-    async def counter_request():
-        start = time.perf_counter()
-        resp = await app.state.client.post(f"{COUNTER_SERVICE_URL}/update", json=payload)
-        return resp, time.perf_counter() - start
+    start_log = time.perf_counter()
+    try:
+        log_url = await get_service_url("logging-service")
+        await app.state.http_client.post(f"{log_url}/log", json=payload, timeout=1.5)
+        app.state.stats["logging_time_total"] += (time.perf_counter() - start_log)
+    except (HTTPException, httpx.HTTPError) as e:
+        print(f"FACADE: Logging failed: {e}")
 
-    (log_resp, log_dur), (counter_resp, counter_dur) = await asyncio.gather(
-        log_request(payload),
-        counter_request()
-    )
-    app.state.stats["logging_time_total"] += log_dur
-    app.state.stats["counter_time_total"] += counter_dur
+    try:
+        app.state.queue.put(payload)
+    except hazelcast.errors.HazelcastError as e:
+        raise HTTPException(status_code=500, detail=f"Message Queue error: {e}") from e
+
     app.state.stats["request_count"] += 1
+    return {"transaction_id": transaction_id, "status": "accepted"}
 
-    counter_data = counter_resp.json()
-    return {"transaction_id": transaction_id, "balance": counter_data.get("balance")}
-    
 @app.get("/user/{user_id}")
 async def get_user_info(user_id: str):
-    balance_resp = await app.state.client.get(f"{COUNTER_SERVICE_URL}/balance/{user_id}")
-    urls = LOGGING_SERVICES.copy()
-    random.shuffle(urls)
+    try:
+        c_url = await get_service_url("counter-service")
+        l_url = await get_service_url("logging-service")
 
-    logs_data = []
-    for url in urls:
-        try:
-            resp = await app.state.client.get(f"{url}/logs/{user_id}", timeout=1.5)
-            if resp.status_code == 200:
-                logs_data = resp.json()
-                break
-        except (httpx.ConnectError, httpx.TimeoutException):
-            continue
+        balance_resp = await app.state.http_client.get(f"{c_url}/balance/{user_id}")
+        logs_resp = await app.state.http_client.get(f"{l_url}/logs/{user_id}")
 
-    return {
-        "balance": balance_resp.json().get("balance"),
-        "transactions": logs_data
-    }
+        return {
+            "balance": balance_resp.json().get("balance"),
+            "transactions": logs_resp.json()
+        }
+    except (HTTPException, httpx.HTTPError, ValueError) as e:
+        return {"balance": None, "transactions": [], "error": str(e)}
 
 @app.get("/accounts")
 async def get_all_accounts():
-    client = app.state.client
-    resp = await client.get(f"{COUNTER_SERVICE_URL}/balances")
-    data = resp.json()
-    return data
+    try:
+        c_url = await get_service_url("counter-service")
+        resp = await app.state.http_client.get(f"{c_url}/balances", timeout=2.0)
+        return resp.json()
+    except (httpx.HTTPError, HTTPException) as e:
+        print(f"FACADE: Cannot fetch accounts: {e}")
+        return {"error": "Counter service unavailable", "accounts": []}
 
 @app.get("/stats")
 def get_stats():
     return app.state.stats
 
-@app.post("/stats/reset")
-def reset_stats():
-    app.state.stats.update({"logging_time_total": 0.0,
-                            "counter_time_total": 0.0, "request_count": 0})
-    return {"status": "reset"}
-
 @app.post("/reset")
 async def reset_all_systems():
-    reset_stats() 
-    await app.state.client.post(f"{COUNTER_SERVICE_URL}/reset")
+    app.state.stats.update({"logging_time_total": 0.0, "request_count": 0})
 
-    urls = LOGGING_SERVICES.copy()
-    random.shuffle(urls)
+    try:
+        c_url = await get_service_url("counter-service")
+        await app.state.http_client.post(f"{c_url}/reset")
+    except (HTTPException, httpx.HTTPError):
+        pass
 
-    reset_successful = False
-    for url in urls:
-        try:
-            resp = await app.state.client.post(f"{url}/reset", timeout=1.5)
-            if resp.status_code == 200:
-                reset_successful = True
-                print(f"FACADE: System reset via {url}")
-                break
-        except (httpx.ConnectError, httpx.TimeoutException):
-            print(f"FACADE: Could not reset via {url}, trying next...")
-            continue
+    try:
+        l_url = await get_service_url("logging-service")
+        await app.state.http_client.post(f"{l_url}/reset")
+    except (HTTPException, httpx.HTTPError):
+        pass
 
-    if not reset_successful:
-        return {"status": "partial reset", "error":
-                "Could not reach any logging service to reset Hazelcast"}
-    return {"status": "all systems reset"}
+    return {"status": "reset request sent"}
