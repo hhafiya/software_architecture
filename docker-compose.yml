@@ -55,64 +55,57 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  config-server:
-    build: ./config-server
-    container_name: config-server
+  consul:
+    image: hashicorp/consul:1.15
+    container_name: consul
     ports:
-      - "8001:8000"
+      - "8500:8500" 
+      - "8600:8600/udp" 
+    command: "agent -dev -client=0.0.0.0"
+
+  consul-init:
+    image: curlimages/curl:latest
+    depends_on:
+      - consul
+    command: >
+      sh -c "
+      sleep 5;
+      curl -X PUT -d 'hz-node-1:5701,hz-node-2:5701,hz-node-3:5701' http://consul:8500/v1/kv/config/hazelcast/servers;
+      curl -X PUT -d 'counter-queue' http://consul:8500/v1/kv/config/mq/queue_name;
+      echo 'Consul KVs initialized';
+      "
 
   logging-service-1:
     build: ./logging-service
     container_name: logging-service-1
     depends_on:
-      config-server:
-        condition: service_started
-      hz-node-1:
-        condition: service_healthy
-      hz-node-2:
-        condition: service_healthy
-      hz-node-3:
-        condition: service_healthy
+      consul-init:
+        condition: service_completed_successfully
     environment:
-      - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
-      - CONFIG_SERVER_URL=http://config-server:8000
-      - SERVICE_NAME=logging-service
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
       - MY_HOST=logging-service-1
 
   logging-service-2:
     build: ./logging-service
     container_name: logging-service-2
     depends_on:
-      config-server:
-        condition: service_started
-      hz-node-1:
-        condition: service_healthy
-      hz-node-2:
-        condition: service_healthy
-      hz-node-3:
-        condition: service_healthy
+      consul-init:
+        condition: service_completed_successfully
     environment:
-      - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
-      - CONFIG_SERVER_URL=http://config-server:8000
-      - SERVICE_NAME=logging-service
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
       - MY_HOST=logging-service-2
 
   logging-service-3:
     build: ./logging-service
     container_name: logging-service-3
     depends_on:
-      config-server:
-        condition: service_started
-      hz-node-1:
-        condition: service_healthy
-      hz-node-2:
-        condition: service_healthy
-      hz-node-3:
-        condition: service_healthy
+      consul-init:
+        condition: service_completed_successfully
     environment:
-      - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
-      - CONFIG_SERVER_URL=http://config-server:8000
-      - SERVICE_NAME=logging-service
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
       - MY_HOST=logging-service-3
 
   counter-service:
@@ -120,12 +113,11 @@ services:
     container_name: counter-service
     depends_on:
       - db
-      - config-server
-      - hz-node-1
+      - consul-init
     environment:
       - DATABASE_URL=postgresql://user:password@db:5432/balances
-      - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
-      - CONFIG_SERVER_URL=http://config-server:8000
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
       - MY_HOST=counter-service
 
   facade-service:
@@ -133,11 +125,11 @@ services:
     ports:
       - "8080:8000"
     depends_on:
-      - config-server
-      - hz-node-1
+      - consul-init
     environment:
-      - CONFIG_SERVER_URL=http://config-server:8000
-      - HZ_SERVERS=hz-node-1:5701,hz-node-2:5701,hz-node-3:5701
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - MY_HOST=facade-service
 
 volumes:
   postgres_data:
