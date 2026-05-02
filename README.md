@@ -1,6 +1,6 @@
 # software_architecture task 5
 
-Protocol:
+Protocol: [text](protocol5_kyrylova.pdf)
 
 
 **Language**: Python 3.13
@@ -29,3 +29,5 @@ curl -X 'POST' \
 ```
 docker-compose up --build
 ```
+
+Check `http://localhost:8500`

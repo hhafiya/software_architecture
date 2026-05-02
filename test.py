@@ -5,7 +5,7 @@ import httpx
 FACADE_URL = "http://localhost:8080/transaction"
 
 CLIENTS = 10
-REQUESTS_PER_CLIENT = 100
+REQUESTS_PER_CLIENT = 10000
 
 async def print_stats(client):
     stats = (await client.get("http://localhost:8080/stats")).json()

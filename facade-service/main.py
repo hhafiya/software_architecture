@@ -80,6 +80,7 @@ async def log_task(payload: dict):
     start = time.perf_counter()
     try:
         log_url = await get_service_url("logging-service")
+        print(f"DEBUG: Facade is sending log to -> {log_url}")
         await app.state.http_client.post(f"{log_url}/log", json=payload, timeout=1.5)
     except (HTTPException, httpx.HTTPError) as e:
         print(f"FACADE: Logging failed: {e}")
