@@ -73,6 +73,7 @@ services:
       curl -X PUT -d 'hz-node-1:5701,hz-node-2:5701,hz-node-3:5701' http://consul:8500/v1/kv/config/hazelcast/servers;
       curl -X PUT -d 'log' http://consul:8500/v1/kv/config/hazelcast/cluster_name;
       curl -X PUT -d 'counter-queue' http://consul:8500/v1/kv/config/mq/queue_name;
+      curl -X PUT -d 'postgresql://user:password@db:5432/balances' http://consul:8500/v1/kv/config/db/url;
       echo 'Consul KVs initialized';
       "
 
