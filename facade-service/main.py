@@ -26,9 +26,10 @@ async def lifespan(app_: FastAPI):
     # Read settings from Config Server (Consul KV)
     hz_servers_str = await fetch_kv(app_.state.http_client, "config/hazelcast/servers")
     hz_servers = hz_servers_str.split(",") if hz_servers_str else ["hz-node-1:5701"]
+    hz_cluster_name = await fetch_kv(app_.state.http_client, "config/hazelcast/cluster_name") or "log"
     queue_name = await fetch_kv(app_.state.http_client, "config/mq/queue_name") or "counter-queue"
 
-    hz_client = hazelcast.HazelcastClient(cluster_members=hz_servers, cluster_name="log")
+    hz_client = hazelcast.HazelcastClient(cluster_members=hz_servers, cluster_name=hz_cluster_name)
     app_.state.queue = hz_client.get_queue(queue_name).blocking()
     app_.state.hz_client = hz_client
 

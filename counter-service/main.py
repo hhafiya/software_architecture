@@ -25,8 +25,8 @@ def init_db():
         except psycopg2.OperationalError:
             time.sleep(2)
 
-def start_queue_worker(hz_servers, queue_name):
-    hz_client = hazelcast.HazelcastClient(cluster_members=hz_servers, cluster_name="log")
+def start_queue_worker(hz_servers, queue_name, hz_cluster_name):
+    hz_client = hazelcast.HazelcastClient(cluster_members=hz_servers, cluster_name=hz_cluster_name)
     queue = hz_client.get_queue(queue_name).blocking()
     db_conn = psycopg2.connect(DATABASE_URL)
 
@@ -52,7 +52,8 @@ async def fetch_kv(client: httpx.AsyncClient, key: str):
         resp = await client.get(f"{CONSUL_URL}/v1/kv/{key}")
         resp.raise_for_status()
         return base64.b64decode(resp.json()[0]['Value']).decode('utf-8')
-    except Exception:
+    except Exception as e:
+        print(f"LOG: Failed to fetch {key} from Consul: {e}")
         return None
 
 @asynccontextmanager
@@ -62,6 +63,7 @@ async def lifespan(app_: FastAPI):
     async with httpx.AsyncClient() as http_client:
         hz_servers_str = await fetch_kv(http_client, "config/hazelcast/servers")
         hz_servers = hz_servers_str.split(",") if hz_servers_str else ["hz-node-1:5701"]
+        hz_cluster_name = await fetch_kv(http_client, "config/hazelcast/cluster_name") or "log"
         queue_name = await fetch_kv(http_client, "config/mq/queue_name") or "counter-queue"
 
         registration_payload = {
@@ -71,7 +73,7 @@ async def lifespan(app_: FastAPI):
         await http_client.put(f"{CONSUL_URL}/v1/agent/service/register", json=registration_payload)
 
     worker_thread = threading.Thread(target=start_queue_worker,
-                                     args=(hz_servers, queue_name), daemon=True)
+                                     args=(hz_servers, queue_name, hz_cluster_name), daemon=True)
     worker_thread.start()
 
     yield

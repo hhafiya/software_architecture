@@ -24,6 +24,7 @@ async def lifespan(app_: FastAPI):
         # Fetch configurations from Consul KV
         hz_servers_str = await fetch_kv(http_client, "config/hazelcast/servers")
         hz_servers = hz_servers_str.split(",") if hz_servers_str else ["hz-node-1:5701"]
+        hz_cluster_name = await fetch_kv(http_client, "config/hazelcast/cluster_name") or "log"
 
         # Register Service
         registration_payload = {
@@ -41,7 +42,7 @@ async def lifespan(app_: FastAPI):
         print(f"LOG: Registered {SERVICE_ID} with Consul")
 
     # Connect to Hazelcast
-    hz_client = hazelcast.HazelcastClient(cluster_members=hz_servers, cluster_name="log")
+    hz_client = hazelcast.HazelcastClient(cluster_members=hz_servers, cluster_name=hz_cluster_name)
     app_.state.hz_map = hz_client.get_map("logmap").blocking()
     app_.state.hz_client = hz_client
 
