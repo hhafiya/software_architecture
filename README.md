@@ -1,6 +1,6 @@
 # software_architecture task 5
 
-Protocol: [text](protocol5_kyrylova.pdf)
+Protocol: [protocol](protocol5_kyrylova.pdf)
 
 
 **Language**: Python 3.13
